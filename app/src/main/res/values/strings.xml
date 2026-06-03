@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">Visura Cam</string>
+    <string name="permission_camera">Camera permission is required to take photos</string>
+    <string name="permission_storage">Storage permission is required to save photos</string>
+    <string name="permission_audio">Microphone permission is required to record video</string>
+    <string name="wb_fix_on">WB Fix active — yellow cast corrected</string>
+    <string name="wb_fix_off">WB Fix disabled — showing raw sensor output</string>
+    <string name="calibrate_hint">Point at white paper in daylight, then tap Calibrate</string>
+    <string name="macro_sweet_spot">Perfect distance — tap to capture</string>
+    <string name="macro_too_close">Too close — move back slightly</string>
+    <string name="macro_too_far">Too far — move closer to 4cm</string>
+    <string name="batch_fix_title">Fix all yellow cast photos</string>
+    <string name="batch_fix_desc">Apply color correction to all past photos from this device</string>
+</resources>
