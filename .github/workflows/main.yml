@@ -1,53 +1,49 @@
 name: Build Visura Cam APK
 
-# Triggers: runs every time you push code to GitHub
 on:
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  # Also lets you trigger manually from GitHub website
   workflow_dispatch:
 
 jobs:
   build:
     name: Build Debug APK
-    runs-on: ubuntu-latest   # GitHub's free cloud computer
+    runs-on: ubuntu-latest
 
     steps:
 
-      # Step 1: Download your code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Install Java 17 (required by Gradle)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle   # caches Java between runs = faster
 
-      # Step 3: Install Android SDK automatically
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # Step 4: Give Gradle permission to run
+      # Generate Gradle wrapper (since gradlew is not in the repo)
+      - name: Install Gradle and generate wrapper
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Generate Gradle wrapper files
+        run: gradle wrapper --gradle-version 8.4
+
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      # Step 5: Create local.properties with SDK path
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
-      # Step 6: Create placeholder TFLite model asset
-      #         (real model can be added later)
       - name: Create assets folder and placeholder model
         run: |
           mkdir -p app/src/main/assets
           echo "placeholder" > app/src/main/assets/scene_detector.tflite
 
-      # Step 7: Cache Gradle dependencies (makes future builds 3x faster)
       - name: Cache Gradle packages
         uses: actions/cache@v4
         with:
@@ -58,22 +54,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # Step 8: Build the debug APK
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
 
-      # Step 9: Upload APK as downloadable artifact
-      #         Go to GitHub → Actions → your run → download from bottom
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: visura-cam-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30   # keeps APK available for 30 days
+          retention-days: 30
 
-      # Step 10: Print APK info in build log
       - name: Show APK info
         run: |
           echo "✅ Build complete!"
