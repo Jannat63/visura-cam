@@ -1,5 +1,13 @@
 package com.visura.cam.camera
 
+import android.opengl.EGL14
+import android.opengl.EGLConfig
+import android.opengl.EGLContext
+import android.opengl.EGLDisplay
+import android.opengl.EGLSurface
+import android.opengl.GLES11Ext
+import android.opengl.GLES30
+
 import android.graphics.SurfaceTexture
 import android.opengl.*
 import android.view.Surface

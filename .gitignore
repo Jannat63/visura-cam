@@ -1,0 +1,30 @@
+# Built files - never upload these
+build/
+app/build/
+.gradle/
+*.apk
+*.aab
+*.dex
+
+# Android Studio / IDE files
+*.iml
+.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keys & secrets - NEVER upload these
+*.jks
+*.keystore
+keystore.properties
+
+# Local config - different on each computer
+local.properties
+
+# Gradle wrapper (keep the wrapper itself, not the cache)
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Log files
+*.log
