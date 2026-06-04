@@ -9,7 +9,6 @@ import android.opengl.GLES11Ext
 import android.opengl.GLES30
 
 import android.graphics.SurfaceTexture
-import android.opengl.*
 import android.view.Surface
 import com.visura.cam.correction.ColorCorrectionEngine
 import java.nio.ByteBuffer

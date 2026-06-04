@@ -1,7 +1,6 @@
 package com.visura.cam.camera
 
 import android.hardware.camera2.CaptureRequest
-import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
 import com.visura.cam.correction.ColorCorrectionEngine
 import kotlinx.coroutines.flow.MutableStateFlow

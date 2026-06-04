@@ -2,6 +2,7 @@ package com.visura.cam.ui.viewfinder
 
 import android.view.Surface
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.flow.first
 import androidx.lifecycle.viewModelScope
 import com.visura.cam.camera.*
 import com.visura.cam.correction.ColorCorrectionEngine
@@ -51,12 +52,9 @@ class ViewfinderViewModel @Inject constructor(
         cameraController.openCamera(ColorCorrectionEngine.LENS_MAIN_108MP)
         // Wait for camera to open, then start preview
         viewModelScope.launch {
-            cameraController.cameraState.collect { state ->
-                if (state is CameraState.Open) {
-                    cameraController.startPreview(surface)
-                    return@collect
-                }
-            }
+            cameraController.cameraState
+                .first { it is CameraState.Open }
+                .let { cameraController.startPreview(surface) }
         }
     }
 

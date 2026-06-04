@@ -9,7 +9,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,21 +38,17 @@ class CalibrationDataStore @Inject constructor(
         }
     }
 
-    fun load(lensId: String): Triple<Float, Float, Float>? {
-        return runBlocking {
-            val prefs = context.dataStore.data.first()
-            val r = prefs[floatPreferencesKey("lens_${lensId}_r")] ?: return@runBlocking null
-            val g = prefs[floatPreferencesKey("lens_${lensId}_g")] ?: return@runBlocking null
-            val b = prefs[floatPreferencesKey("lens_${lensId}_b")] ?: return@runBlocking null
-            Triple(r, g, b)
-        }
+    suspend fun load(lensId: String): Triple<Float, Float, Float>? {
+        val prefs = context.dataStore.data.first()
+        val r = prefs[floatPreferencesKey("lens_${lensId}_r")] ?: return null
+        val g = prefs[floatPreferencesKey("lens_${lensId}_g")] ?: return null
+        val b = prefs[floatPreferencesKey("lens_${lensId}_b")] ?: return null
+        return Triple(r, g, b)
     }
 
-    fun isCalibrated(lensId: String): Boolean {
-        return runBlocking {
-            val prefs = context.dataStore.data.first()
-            (prefs[floatPreferencesKey("lens_${lensId}_calibrated")] ?: 0f) == 1f
-        }
+    suspend fun isCalibrated(lensId: String): Boolean {
+        val prefs = context.dataStore.data.first()
+        return (prefs[floatPreferencesKey("lens_${lensId}_calibrated")] ?: 0f) == 1f
     }
 
     fun resetToDefaults(lensId: String) {

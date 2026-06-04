@@ -33,7 +33,7 @@ class SceneDetector @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private var interpreter: Interpreter? = null
-    private val gpuDelegate = GpuDelegate()
+    private var gpuDelegate: GpuDelegate? = null
 
     // 15 scene categories optimised for Bangladesh / South Asia outdoor shooting
     enum class SceneType(val label: String) {
@@ -63,14 +63,24 @@ class SceneDetector @Inject constructor(
 
     fun initialize() {
         try {
+            val delegate = GpuDelegate()
+            gpuDelegate = delegate
             val options = Interpreter.Options().apply {
-                addDelegate(gpuDelegate)  // Use Adreno 618 GPU
-                numThreads = 4            // Snapdragon 720G has 8 cores
+                addDelegate(delegate)
+                numThreads = 4
             }
             interpreter = Interpreter(loadModelFile("scene_detector.tflite"), options)
         } catch (e: Exception) {
-            // Fallback: CPU inference
-            interpreter = Interpreter(loadModelFile("scene_detector.tflite"))
+            // Fallback: CPU-only inference (no GPU delegate)
+            try {
+                interpreter = Interpreter(
+                    loadModelFile("scene_detector.tflite"),
+                    Interpreter.Options().apply { numThreads = 4 }
+                )
+            } catch (e2: Exception) {
+                // Model file is placeholder — scene detection disabled
+                interpreter = null
+            }
         }
     }
 
@@ -79,7 +89,7 @@ class SceneDetector @Inject constructor(
      * Called every 30 frames (once per second at 30fps preview).
      */
     fun detect(bitmap: Bitmap): SceneResult {
-        val interpreter = interpreter ?: return defaultResult()
+        val interpreter = this.interpreter ?: return defaultResult()
 
         // Resize to model input size (224×224)
         val resized = Bitmap.createScaledBitmap(bitmap, 224, 224, true)
@@ -222,6 +232,6 @@ class SceneDetector @Inject constructor(
 
     fun close() {
         interpreter?.close()
-        gpuDelegate.close()
+        gpuDelegate?.close()
     }
 }

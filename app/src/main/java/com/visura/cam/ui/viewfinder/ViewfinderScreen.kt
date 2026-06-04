@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.material.icons.Icons
 
 // ─── Visura Cam Color Palette ────────────────────────────────────
 object VisuraColors {
@@ -627,25 +628,20 @@ data class ViewfinderUiState(
     val timerLabel: String = "OFF",
     val aspectRatioLabel: String = "4:3"
 ) {
-    val flashIcon get() = when (flashMode) {
-        FlashModeUI.OFF   -> rememberFlashOffIcon()
-        FlashModeUI.AUTO  -> rememberFlashAutoIcon()
-        FlashModeUI.ON    -> rememberFlashOnIcon()
-        FlashModeUI.TORCH -> rememberTorchIcon()
-    }
+    // flashIcon resolved in TopControlBar composable directly
 }
 
 data class FocusPoint(val x: Float, val y: Float)
 enum class FocusState { IDLE, SEARCHING, LOCKED, FAILED }
 data class HistogramData(val r: FloatArray, val g: FloatArray, val b: FloatArray)
 
-// Placeholder composable helpers (would be proper icons in production)
+// Icon helpers using material-icons-extended (included in build.gradle)
 @Composable fun rememberSettingsIcon() = androidx.compose.material.icons.Icons.Default.Settings
-@Composable fun rememberFlipIcon() = androidx.compose.material.icons.Icons.Default.Refresh
+@Composable fun rememberFlipIcon() = androidx.compose.material.icons.Icons.Default.Cameraswitch
 @Composable fun rememberFlashOffIcon() = androidx.compose.material.icons.Icons.Default.FlashOff
 @Composable fun rememberFlashAutoIcon() = androidx.compose.material.icons.Icons.Default.FlashAuto
 @Composable fun rememberFlashOnIcon() = androidx.compose.material.icons.Icons.Default.FlashOn
-@Composable fun rememberTorchIcon() = androidx.compose.material.icons.Icons.Default.Lightbulb
+@Composable fun rememberTorchIcon() = androidx.compose.material.icons.Icons.Default.Flashlight
 // abs() from kotlin.math used directly
 
 // Placeholder composables — implement with actual logic
