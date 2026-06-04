@@ -43,8 +43,11 @@ jobs:
           mkdir -p app/src/main/assets
           echo "placeholder" > app/src/main/assets/scene_detector.tflite
 
-      # Generate app icons using ImageMagick (pre-installed on Ubuntu runners)
-      # Creates simple yellow-green squares — Visura Cam accent color #B8F026
+      # Install ImageMagick so we can generate PNG icons
+      - name: Install ImageMagick
+        run: sudo apt-get install -y imagemagick
+
+      # Generate app icons — yellow-green squares (Visura Cam accent color)
       - name: Generate app icons
         run: |
           mkdir -p app/src/main/res/mipmap-mdpi
@@ -52,18 +55,18 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
-          convert -size 48x48   xc:"#B8F026" app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert -size 48x48   xc:"#B8F026" app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-          convert -size 72x72   xc:"#B8F026" app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert -size 72x72   xc:"#B8F026" app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-          convert -size 96x96   xc:"#B8F026" app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert -size 96x96   xc:"#B8F026" app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-          convert -size 144x144 xc:"#B8F026" app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert -size 144x144 xc:"#B8F026" app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-          convert -size 192x192 xc:"#B8F026" app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          convert -size 192x192 xc:"#B8F026" app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
-          echo "Icons generated successfully"
-          ls app/src/main/res/mipmap-xxhdpi/
+          convert -size 48x48   xc:"#B8F026" PNG24:app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert -size 48x48   xc:"#B8F026" PNG24:app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          convert -size 72x72   xc:"#B8F026" PNG24:app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert -size 72x72   xc:"#B8F026" PNG24:app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          convert -size 96x96   xc:"#B8F026" PNG24:app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert -size 96x96   xc:"#B8F026" PNG24:app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+          convert -size 144x144 xc:"#B8F026" PNG24:app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert -size 144x144 xc:"#B8F026" PNG24:app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          convert -size 192x192 xc:"#B8F026" PNG24:app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          convert -size 192x192 xc:"#B8F026" PNG24:app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          echo "Icons generated:"
+          ls -la app/src/main/res/mipmap-xxhdpi/
 
       - name: Cache Gradle packages
         uses: actions/cache@v4
