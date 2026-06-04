@@ -122,14 +122,14 @@ class BatchColorFixer @Inject constructor(
     }
 
     private fun scanGalleryPhotos(): List<Uri> {
+        // Scan all photos - MODEL column doesn't exist in MediaStore
+        // Color correction applies per-lens so works on any photo
         val photos = mutableListOf<Uri>()
-        val projection = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.MODEL)
-        val selection = "${MediaStore.Images.Media.MODEL} LIKE ?"
-        val selectionArgs = arrayOf("%RMX3081%")   // Realme 8 Pro model number
+        val projection = arrayOf(MediaStore.Images.Media._ID)
 
         context.contentResolver.query(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            projection, selection, selectionArgs,
+            projection, null, null,
             "${MediaStore.Images.Media.DATE_TAKEN} DESC"
         )?.use { cursor ->
             val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
