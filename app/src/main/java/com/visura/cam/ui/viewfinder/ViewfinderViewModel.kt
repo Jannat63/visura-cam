@@ -2,10 +2,11 @@ package com.visura.cam.ui.viewfinder
 
 import android.view.Surface
 import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.flow.first
 import androidx.lifecycle.viewModelScope
 import com.visura.cam.camera.*
 import com.visura.cam.correction.ColorCorrectionEngine
+import com.visura.cam.utils.ImageSaver
+import com.visura.cam.utils.ProRenderEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -15,14 +16,22 @@ import javax.inject.Inject
 class ViewfinderViewModel @Inject constructor(
     private val cameraController: VisuraCameraController,
     private val colorEngine: ColorCorrectionEngine,
-    private val macroController: MacroController
+    private val macroController: MacroController,
+    private val imageSaver: ImageSaver
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ViewfinderUiState())
     val uiState: StateFlow<ViewfinderUiState> = _uiState.asStateFlow()
 
+    // Last shot info for overlay display
+    private val _lastShotInfo = MutableStateFlow<ProRenderEngine.ShotInfo?>(null)
+    val lastShotInfo: StateFlow<ProRenderEngine.ShotInfo?> = _lastShotInfo.asStateFlow()
+
+    private var lastPreviewSurface: Surface? = null
+    private var currentScene: String = "general"
+
     init {
-        // Observe macro distance guide
+        // Observe macro distance
         viewModelScope.launch {
             macroController.distanceGuide.collect { guide ->
                 _uiState.update { it.copy(
@@ -34,38 +43,39 @@ class ViewfinderViewModel @Inject constructor(
                             else -> MacroStatus.UNKNOWN
                         },
                         distanceCm = guide.estimatedDistanceCm,
-                        sharpness = guide.sharpnessScore
+                        sharpness  = guide.sharpnessScore
                     )
                 )}
             }
         }
 
-        // Observe stabilisation state
+        // Observe stabilisation
         viewModelScope.launch {
             macroController.stabilisationReady.collect { ready ->
                 _uiState.update { it.copy(isHandSteady = ready) }
             }
         }
+
+        // Auto-restart preview when lens opens
+        viewModelScope.launch {
+            cameraController.cameraState.collect { state ->
+                if (state is CameraState.Open) {
+                    lastPreviewSurface?.let { cameraController.startPreview(it) }
+                }
+            }
+        }
     }
 
     fun onSurfaceCreated(surface: android.view.Surface) {
+        lastPreviewSurface = surface
         cameraController.openCamera(ColorCorrectionEngine.LENS_MAIN_108MP)
-        // Wait for camera to open, then start preview
-        viewModelScope.launch {
-            cameraController.cameraState
-                .first { it is CameraState.Open }
-                .let { cameraController.startPreview(surface) }
-        }
     }
 
     fun capture() {
         val mode = _uiState.value.shootMode
         _uiState.update { it.copy(isCapturing = true) }
-
         if (mode == ShootModeUI.MACRO && _uiState.value.stabilisationAssistActive) {
-            macroController.captureWhenStable {
-                performCapture()
-            }
+            macroController.captureWhenStable { performCapture() }
             _uiState.update { it.copy(isWaitingForStable = true) }
         } else {
             performCapture()
@@ -73,12 +83,50 @@ class ViewfinderViewModel @Inject constructor(
     }
 
     private fun performCapture() {
+        currentScene = when (_uiState.value.shootMode) {
+            ShootModeUI.MACRO     -> "macro"
+            ShootModeUI.PORTRAIT  -> "portrait"
+            ShootModeUI.NIGHT     -> "night"
+            else                  -> "general"
+        }
+
         cameraController.capturePhoto { imageCapture ->
             viewModelScope.launch {
-                _uiState.update { it.copy(isCapturing = false, isWaitingForStable = false) }
+
+                // Build ShotInfo from actual capture result
+                val profile = colorEngine.getProfile(imageCapture.lensId)
+                val shotInfo = ProRenderEngine.ShotInfo(
+                    lensId        = imageCapture.lensId,
+                    scene         = currentScene,
+                    iso           = imageCapture.actualIso,
+                    shutterSpeedNs = imageCapture.actualShutterNs,
+                    aperture      = imageCapture.actualAperture,
+                    focalLengthMm = imageCapture.focalLengthMm,
+                    rGain         = profile.rGain,
+                    gGain         = profile.gEvenGain,
+                    bGain         = profile.bGain
+                )
+
+                // Save with full professional pipeline
+                imageCapture.jpeg?.let { jpeg ->
+                    imageSaver.saveJpeg(jpeg, imageCapture.lensId, shotInfo)
+                }
+                imageCapture.raw?.let { raw ->
+                    imageSaver.saveRawDng(raw, imageCapture.lensId)
+                }
+
+                // Show shot info overlay
+                _lastShotInfo.value = shotInfo
+
+                _uiState.update { it.copy(
+                    isCapturing = false,
+                    isWaitingForStable = false
+                )}
             }
         }
     }
+
+    fun dismissShotInfo() { _lastShotInfo.value = null }
 
     fun toggleFlash() {
         val next = when (_uiState.value.flashMode) {
@@ -92,94 +140,85 @@ class ViewfinderViewModel @Inject constructor(
 
     fun toggleTimer() {
         val next = when (_uiState.value.timerLabel) {
-            "OFF" -> "3s"
-            "3s"  -> "10s"
-            else  -> "OFF"
+            "OFF" -> "3s"; "3s" -> "10s"; else -> "OFF"
         }
         _uiState.update { it.copy(timerLabel = next) }
     }
 
     fun setAspectRatio() {
         val next = when (_uiState.value.aspectRatioLabel) {
-            "4:3"  -> "16:9"
-            "16:9" -> "1:1"
-            "1:1"  -> "Full"
-            else   -> "4:3"
+            "4:3" -> "16:9"; "16:9" -> "1:1"; "1:1" -> "Full"; else -> "4:3"
         }
         _uiState.update { it.copy(aspectRatioLabel = next) }
     }
 
     fun setShootMode(mode: ShootModeUI) {
         _uiState.update { it.copy(shootMode = mode) }
-        // Switch physical lens if needed
         val lensId = when (mode) {
             ShootModeUI.MACRO -> ColorCorrectionEngine.LENS_MACRO
             else              -> ColorCorrectionEngine.LENS_MAIN_108MP
         }
-        cameraController.switchLens(lensId)
+        switchLens(lensId)
     }
 
     fun setZoom(zoom: Float) {
         _uiState.update { it.copy(currentZoom = zoom) }
-        // 0.6x = ultrawide lens, others = main with digital crop
-        if (zoom == 0.6f) {
-            cameraController.switchLens(ColorCorrectionEngine.LENS_ULTRAWIDE)
-        } else {
-            cameraController.switchLens(ColorCorrectionEngine.LENS_MAIN_108MP)
-        }
+        switchLens(
+            if (zoom == 0.6f) ColorCorrectionEngine.LENS_ULTRAWIDE
+            else ColorCorrectionEngine.LENS_MAIN_108MP
+        )
+    }
+
+    private fun switchLens(lensId: String) {
+        cameraController.switchLens(lensId)
+        // Preview restarts via cameraState watcher in init
     }
 
     fun toggleColorCorrection() {
         val newState = !_uiState.value.colorCorrectionActive
         _uiState.update { it.copy(colorCorrectionActive = newState) }
         colorEngine.toggleCorrection(cameraController.currentLensId, newState)
+        lastPreviewSurface?.let { cameraController.startPreview(it) }
     }
 
     fun setISO(iso: Int) {
-        _uiState.update { state ->
-            state.copy(proSettings = state.proSettings.copy(isoValue = iso))
-        }
+        _uiState.update { s -> s.copy(proSettings = s.proSettings.copy(isoValue = iso)) }
         cameraController.updateSettings { copy(iso = iso, isProMode = true) }
+        lastPreviewSurface?.let { cameraController.startPreview(it) }
     }
 
     fun setShutter(shutterNs: Long) {
-        _uiState.update { state ->
-            state.copy(proSettings = state.proSettings.copy(shutterNs = shutterNs))
-        }
+        _uiState.update { s -> s.copy(proSettings = s.proSettings.copy(shutterNs = shutterNs)) }
         cameraController.updateSettings { copy(shutterSpeedNs = shutterNs, isProMode = true) }
+        lastPreviewSurface?.let { cameraController.startPreview(it) }
     }
 
     fun setEV(ev: Int) {
-        _uiState.update { state ->
-            state.copy(proSettings = state.proSettings.copy(evValue = ev))
-        }
+        _uiState.update { s -> s.copy(proSettings = s.proSettings.copy(evValue = ev)) }
         cameraController.updateSettings { copy(evCompensation = ev) }
+        lastPreviewSurface?.let { cameraController.startPreview(it) }
     }
 
     fun setWhiteBalance(kelvin: Int) {
-        _uiState.update { state ->
-            state.copy(proSettings = state.proSettings.copy(wbKelvin = kelvin))
-        }
+        _uiState.update { s -> s.copy(proSettings = s.proSettings.copy(wbKelvin = kelvin)) }
         cameraController.updateSettings { copy(whiteBalanceKelvin = kelvin, isProMode = true) }
+        lastPreviewSurface?.let { cameraController.startPreview(it) }
     }
 
     fun setFocusDistance(distance: Float) {
-        _uiState.update { state ->
-            state.copy(proSettings = state.proSettings.copy(focusDistance = distance))
-        }
+        _uiState.update { s -> s.copy(proSettings = s.proSettings.copy(focusDistance = distance)) }
         cameraController.updateSettings { copy(focusDistance = distance, isProMode = true) }
+        lastPreviewSurface?.let { cameraController.startPreview(it) }
     }
 
     fun flipCamera() {
         val frontId = cameraController.getFrontCameraId()
         val isFront = cameraController.currentLensId == frontId
-        cameraController.switchLens(
-            if (isFront) ColorCorrectionEngine.LENS_MAIN_108MP else frontId
-        )
+        switchLens(if (isFront) ColorCorrectionEngine.LENS_MAIN_108MP else frontId)
     }
 
-    fun openGallery() { /* navigate to gallery screen */ }
-    fun openSettings() { /* navigate to settings screen */ }
+    fun openGallery()  { /* navigate */ }
+    fun openSettings() { /* navigate */ }
 
     override fun onCleared() {
         super.onCleared()

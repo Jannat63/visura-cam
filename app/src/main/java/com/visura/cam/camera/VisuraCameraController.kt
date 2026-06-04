@@ -294,12 +294,7 @@ class VisuraCameraController @Inject constructor(
 
     fun updateSettings(block: CaptureSettings.() -> CaptureSettings) {
         _captureSettings.value = block(_captureSettings.value)
-        // Re-apply preview with new settings
-        // Re-trigger preview with updated settings if session is active
-        val session = captureSession ?: return
-        val device = cameraDevice ?: return
-        val surface = (session as? CameraCaptureSession)?.let { null } ?: return
-        // Preview will be rebuilt on next startPreview() call or lens switch
+        // Settings updated — caller (ViewModel) will call startPreview() to apply them
     }
 
     fun switchLens(lensId: String) {
@@ -363,4 +358,23 @@ data class ImageCapture(
     val raw: android.media.Image?,
     val captureResult: TotalCaptureResult,
     val lensId: String
-)
+) {
+    // Extract actual ISO and shutter from capture result for EXIF + shot info
+    val actualIso: Int get() =
+        captureResult.get(android.hardware.camera2.CaptureResult.SENSOR_SENSITIVITY) ?: 100
+    val actualShutterNs: Long get() =
+        captureResult.get(android.hardware.camera2.CaptureResult.SENSOR_EXPOSURE_TIME) ?: 33_000_000L
+    val actualAperture: Float get() = when (lensId) {
+        "0" -> 1.88f   // Main 108MP f/1.88
+        "1" -> 2.25f   // Ultrawide f/2.25
+        "2" -> 2.4f    // Macro f/2.4
+        "3" -> 2.4f    // Depth f/2.4
+        else -> 2.45f  // Selfie f/2.45
+    }
+    val focalLengthMm: Float get() = when (lensId) {
+        "0" -> 4.74f   // Main ~26mm equiv
+        "1" -> 1.86f   // Ultrawide ~13mm equiv
+        "2" -> 4.74f   // Macro ~29mm equiv
+        else -> 3.47f  // Selfie ~22mm equiv
+    }
+}

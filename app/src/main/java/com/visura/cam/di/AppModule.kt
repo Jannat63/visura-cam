@@ -47,7 +47,10 @@ object AppModule {
         SceneDetector(ctx)
 
     @Provides @Singleton
-    fun provideImageSaver(@ApplicationContext ctx: Context) = ImageSaver(ctx)
+    fun provideImageSaver(
+        @ApplicationContext ctx: Context,
+        engine: ColorCorrectionEngine
+    ) = ImageSaver(ctx, engine)  // Full pro pipeline inside
 
     @Provides @Singleton
     fun provideBatchColorFixer(

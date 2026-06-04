@@ -50,6 +50,7 @@ fun ViewfinderScreen(
     viewModel: ViewfinderViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val lastShotInfo by viewModel.lastShotInfo.collectAsState()
     val haptic = LocalHapticFeedback.current
 
     Box(
