@@ -68,6 +68,8 @@ class ViewfinderViewModel @Inject constructor(
 
     fun onSurfaceCreated(surface: android.view.Surface) {
         lastPreviewSurface = surface
+        // Permission already granted by WithCameraPermission in MainActivity
+        @Suppress("MissingPermission")
         cameraController.openCamera(ColorCorrectionEngine.LENS_MAIN_108MP)
     }
 
@@ -171,7 +173,7 @@ class ViewfinderViewModel @Inject constructor(
 
     private fun switchLens(lensId: String) {
         cameraController.switchLens(lensId)
-        // Preview restarts via cameraState watcher in init
+        // Preview restarts automatically via cameraState watcher in init{}
     }
 
     fun toggleColorCorrection() {

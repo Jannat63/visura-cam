@@ -72,7 +72,7 @@ object ExifWriter {
         // Shutter speed as rational (numerator/denominator)
         val shutterSec = shotInfo.shutterSpeedNs / 1_000_000_000.0
         if (shutterSec < 1.0) {
-            val denom = (1.0 / shutterSec).roundToInt()
+            val denom = kotlin.math.round(1.0 / shutterSec).toInt()
             exif.setAttribute(ExifInterface.TAG_EXPOSURE_TIME, "1/$denom")
         } else {
             exif.setAttribute(ExifInterface.TAG_EXPOSURE_TIME, "$shutterSec/1")
@@ -135,6 +135,5 @@ object ExifWriter {
         return "$degrees/1,$minutes/1,${(seconds * 1000).toInt()}/1000"
     }
 
-    private fun Double.roundToInt() = kotlin.math.round(this).toInt()
     private fun log2(x: Double) = kotlin.math.ln(x) / kotlin.math.ln(2.0)
 }

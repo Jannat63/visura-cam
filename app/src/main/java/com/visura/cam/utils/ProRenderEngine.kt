@@ -2,6 +2,7 @@ package com.visura.cam.utils
 
 import android.graphics.*
 import kotlin.math.*
+import kotlin.math.roundToInt
 
 /**
  * ProRenderEngine — Professional photography rendering by Ahsan Jannat.
@@ -171,7 +172,7 @@ object ProRenderEngine {
             // Shadow lift
             val lifted = t + shadowLift * (1f - t) * (1f - t)
             // Midtone S-curve
-            val punched = lifted + midtonePunch * sin(lifted * PI.toFloat()) * 0.15f
+            val punched = lifted + midtonePunch * sin(lifted * Math.PI.toFloat()) * 0.15f
             // Highlight rolloff
             val rolled = punched - highlightRoll * punched * punched * punched
             (rolled * 255f).roundToInt().coerceIn(0, 255)

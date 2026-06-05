@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Cameraswitch
@@ -658,7 +659,6 @@ data class HistogramData(val r: FloatArray, val g: FloatArray, val b: FloatArray
 // abs() from kotlin.math used directly
 
 // Placeholder composables — implement with actual logic
-// CameraPreviewSurface is implemented in CameraPreviewSurface.kt
 @Composable fun GridOverlay(modifier: Modifier) {}
 @Composable fun LiveHistogram(histogramData: HistogramData?, modifier: Modifier) {}
 @Composable fun FocusIndicator(x: Float, y: Float, state: FocusState) {}
