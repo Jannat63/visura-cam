@@ -28,9 +28,11 @@ class ColorCorrectionEngine @Inject constructor(
     companion object {
         // Default correction for Realme 8 Pro water damage
         // These values cancel the yellow cast: reduce R/G, boost B
-        const val DEFAULT_R_GAIN = 0.82f
-        const val DEFAULT_G_GAIN = 0.91f
-        const val DEFAULT_B_GAIN = 1.18f
+        // Gentle correction - applied in post-processing (ImageSaver), NOT on live preview
+        // This avoids the green cast that happened when AWB was disabled on the sensor
+        const val DEFAULT_R_GAIN = 0.88f   // Reduce red (water damage yellow fix)
+        const val DEFAULT_G_GAIN = 0.95f   // Slightly reduce green
+        const val DEFAULT_B_GAIN = 1.10f   // Boost blue gently
 
         // Lens IDs on Realme 8 Pro
         // Back cameras: 0=main, 1=ultrawide, 2=macro, 3=depth
@@ -51,44 +53,12 @@ class ColorCorrectionEngine @Inject constructor(
         LENS_SELFIE     to CorrectionProfile(1.0f,  1.0f,  1.0f),   // Sony IMX471 unaffected
     )
 
-    /**
-     * Apply color correction to a Camera2 CaptureRequest.Builder.
-     * Call this before every capture and every preview frame.
-     */
-    fun applyToCapture(builder: CaptureRequest.Builder, lensId: String = LENS_MAIN_108MP) {
-        val profile = lensProfiles[lensId] ?: lensProfiles[LENS_MAIN_108MP]!!
-
-        if (!profile.enabled) return
-
-        // Disable auto white balance — take full manual control
-        builder.set(
-            CaptureRequest.CONTROL_AWB_MODE,
-            CaptureRequest.CONTROL_AWB_MODE_OFF
-        )
-
-        // Apply RGB gain correction as RggbChannelVector
-        // Format: Red, Green(even), Green(odd), Blue — Samsung HM2 uses RGGB Bayer pattern
-        builder.set(
-            CaptureRequest.COLOR_CORRECTION_GAINS,
-            RggbChannelVector(
-                profile.rGain,
-                profile.gEvenGain,
-                profile.gOddGain,
-                profile.bGain
-            )
-        )
-
-        // Set correction mode to FAST (not HIGH_QUALITY, to avoid ISP override)
-        builder.set(
-            CaptureRequest.COLOR_CORRECTION_MODE,
-            CaptureRequest.COLOR_CORRECTION_MODE_TRANSFORM_MATRIX
-        )
-
-        // Apply color transform matrix — 3x3 CCM for accurate color rendering
-        builder.set(
-            CaptureRequest.COLOR_CORRECTION_TRANSFORM,
-            profile.colorTransformMatrix
-        )
+    // applyToCapture: CameraX handles AWB automatically
+    // Yellow cast correction is applied in ImageSaver post-processing pipeline
+    // This avoids the green cast from disabling sensor AWB
+    fun applyToCapture(builder: android.hardware.camera2.CaptureRequest.Builder, lensId: String = LENS_MAIN_108MP) {
+        // Intentionally empty - CameraX AWB handles live preview
+        // Post-processing in ImageSaver applies the color correction after capture
     }
 
     /**
