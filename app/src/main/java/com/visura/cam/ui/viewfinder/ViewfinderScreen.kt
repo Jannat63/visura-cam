@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
@@ -434,7 +435,7 @@ fun IconBtn(
     tint: Color = VC.White
 ) {
     IconButton(onClick = onClick, modifier = Modifier.size(size)) {
-        Icon(icon, contentDescription = null, tint = tint,
+        Icon(imageVector = icon, contentDescription = null, tint = tint,
             modifier = Modifier.size(size * 0.55f))
     }
 }
@@ -454,7 +455,7 @@ fun LastPhotoThumb(uri: Uri?, modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
             )
         } else {
-            Icon(Icons.Default.PhotoLibrary, null,
+            Icon(imageVector = Icons.Default.PhotoLibrary, contentDescription = null,
                 tint = VC.DarkGrey, modifier = Modifier.size(28.dp))
         }
     }

@@ -84,9 +84,10 @@ object ProRenderEngine {
         val radius = sqrt(cx * cx + cy * cy) * 1.1f
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = RadialGradient(
-                cx, cy, radius * 0.45f, radius,
+                cx, cy, radius,
                 intArrayOf(Color.TRANSPARENT,
                     Color.argb((strength * 255).toInt(), 0, 0, 0)),
+                floatArrayOf(0.45f, 1.0f),
                 Shader.TileMode.CLAMP
             )
         }
@@ -129,7 +130,7 @@ object ProRenderEngine {
             val punched = lifted + midPunch * sin(lifted * PI.toFloat()) * 0.18f
             // Highlight rolloff (compress highlights naturally)
             val rolled = punched - highlightRoll * punched * punched * punched
-            (rolled * 255f).roundToInt().coerceIn(0, 255)
+            (rolled * 255f).toInt().coerceIn(0, 255)
         }
 
         val pixels = IntArray(bmp.width * bmp.height)
@@ -293,19 +294,14 @@ object ProRenderEngine {
             0f,           -strength*0.2f, 0f
         )
         // Apply via Android's built-in convolution (much faster than manual)
-        return try {
-            val script = android.renderscript.RenderScript.create(null)
-            bmp  // Fallback: return original if RS not available
-        } catch (e: Exception) {
-            // Fallback: use ColorMatrix approximation
-            val s = strength * 0.05f
-            applyMatrix(bmp, ColorMatrix(floatArrayOf(
-                1f+s, 0f,   0f,   0f, -s*120f,
-                0f,   1f+s, 0f,   0f, -s*120f,
-                0f,   0f,   1f+s, 0f, -s*120f,
-                0f,   0f,   0f,   1f, 0f
-            )))
-        }
+        // ColorMatrix sharpening - fast and reliable on all devices
+        val s = strength * 0.05f
+        return applyMatrix(bmp, ColorMatrix(floatArrayOf(
+            1f+s, 0f,   0f,   0f, -s*120f,
+            0f,   1f+s, 0f,   0f, -s*120f,
+            0f,   0f,   1f+s, 0f, -s*120f,
+            0f,   0f,   0f,   1f, 0f
+        )))
     }
 
     // ── Utility ───────────────────────────────────────────────────
@@ -318,8 +314,6 @@ object ProRenderEngine {
         return out
     }
 
-    private fun Int.roundToInt() = kotlin.math.round(this.toFloat()).toInt()
-    private fun Float.roundToInt() = kotlin.math.round(this).toInt()
 
     // ── Data classes ──────────────────────────────────────────────
 
