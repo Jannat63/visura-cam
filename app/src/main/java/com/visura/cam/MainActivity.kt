@@ -10,7 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.visura.cam.ui.viewfinder.VisuraColors
+import com.visura.cam.ui.viewfinder.VC
 import com.visura.cam.ui.viewfinder.ViewfinderScreen
 import com.visura.cam.utils.WithCameraPermission
 import dagger.hilt.android.AndroidEntryPoint
@@ -21,15 +21,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            // *** CRITICAL: Check permissions BEFORE showing camera ***
             WithCameraPermission {
-                val navController = rememberNavController()
+                val nav = rememberNavController()
                 NavHost(
-                    navController = navController,
+                    navController = nav,
                     startDestination = "viewfinder",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(VisuraColors.Background)
+                    modifier = Modifier.fillMaxSize().background(VC.Bg)
                 ) {
                     composable("viewfinder") { ViewfinderScreen() }
                 }

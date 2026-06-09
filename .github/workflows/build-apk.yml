@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -29,7 +28,7 @@ jobs:
         with:
           gradle-version: '8.4'
 
-      - name: Generate Gradle wrapper files
+      - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.4
 
       - name: Make gradlew executable
@@ -38,16 +37,28 @@ jobs:
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
-      - name: Create assets folder and placeholder model
-        run: |
-          mkdir -p app/src/main/assets
-          echo "placeholder" > app/src/main/assets/scene_detector.tflite
+      - name: Create assets folder
+        run: mkdir -p app/src/main/assets && echo "placeholder" > app/src/main/assets/scene_detector.tflite
 
-      # Install ImageMagick so we can generate PNG icons
+      # Delete old files that no longer exist in codebase
+      - name: Remove old source files
+        run: |
+          rm -f app/src/main/java/com/visura/cam/ai/SceneDetector.kt
+          rm -f app/src/main/java/com/visura/cam/camera/VisuraCameraController.kt
+          rm -f app/src/main/java/com/visura/cam/camera/PreviewCorrectionRenderer.kt
+          rm -f app/src/main/java/com/visura/cam/camera/MacroController.kt
+          rm -f app/src/main/java/com/visura/cam/camera/NightModeController.kt
+          rm -f app/src/main/java/com/visura/cam/ui/viewfinder/ShotInfoOverlay.kt
+          rm -f app/src/main/java/com/visura/cam/ui/viewfinder/CameraPreviewSurface.kt
+          rm -f app/src/main/java/com/visura/cam/utils/BatchColorFixer.kt
+          rm -f app/src/main/java/com/visura/cam/utils/ExifWriter.kt
+          rm -f app/src/main/java/com/visura/cam/utils/ImageProcessor.kt
+          echo "Old files removed"
+          find app/src/main/java -name "*.kt" | sort
+
       - name: Install ImageMagick
         run: sudo apt-get install -y imagemagick
 
-      # Generate app icons — yellow-green squares (Visura Cam accent color)
       - name: Generate app icons
         run: |
           mkdir -p app/src/main/res/mipmap-mdpi
@@ -65,8 +76,6 @@ jobs:
           convert -size 144x144 xc:"#B8F026" PNG24:app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
           convert -size 192x192 xc:"#B8F026" PNG24:app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           convert -size 192x192 xc:"#B8F026" PNG24:app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
-          echo "Icons generated:"
-          ls -la app/src/main/res/mipmap-xxhdpi/
 
       - name: Cache Gradle packages
         uses: actions/cache@v4
@@ -75,22 +84,19 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          restore-keys: ${{ runner.os }}-gradle-
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
 
-      - name: Upload Debug APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: visura-cam-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      - name: Show APK info
-        run: |
-          echo "✅ Build complete!"
-          ls -lh app/build/outputs/apk/debug/
+      - name: Done
+        run: ls -lh app/build/outputs/apk/debug/

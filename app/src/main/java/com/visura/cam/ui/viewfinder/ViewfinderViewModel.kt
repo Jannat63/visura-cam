@@ -82,7 +82,7 @@ class ViewfinderViewModel @Inject constructor(
 
         cameraManager.takePicture(
             outputOptions,
-            onSaved = { result ->
+            onSaved = { result: androidx.camera.core.ImageCapture.OutputFileResults ->
                 viewModelScope.launch {
                     val uri = result.savedUri
                     if (uri != null) {
@@ -113,7 +113,7 @@ class ViewfinderViewModel @Inject constructor(
                     _uiState.update { it.copy(isCapturing = false) }
                 }
             },
-            onError = { e ->
+            onError = { e: androidx.camera.core.ImageCaptureException ->
                 Log.e(TAG, "Capture failed", e)
                 viewModelScope.launch {
                     _uiState.update { it.copy(isCapturing = false) }

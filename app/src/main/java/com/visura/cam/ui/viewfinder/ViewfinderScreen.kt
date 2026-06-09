@@ -25,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -467,24 +466,18 @@ fun LastPhotoThumb(uri: Uri?, modifier: Modifier = Modifier) {
 fun GridOverlay(modifier: Modifier = Modifier) {
     androidx.compose.foundation.Canvas(modifier = modifier) {
         val w = size.width; val h = size.height
-        val paint = androidx.compose.ui.graphics.Paint().apply {
-            color = Color.White.copy(alpha = 0.25f)
-            strokeWidth = 1f
-        }
-        drawIntoCanvas { canvas ->
-            canvas.drawLine(
-                androidx.compose.ui.geometry.Offset(w / 3f, 0f),
-                androidx.compose.ui.geometry.Offset(w / 3f, h), paint)
-            canvas.drawLine(
-                androidx.compose.ui.geometry.Offset(w * 2f / 3f, 0f),
-                androidx.compose.ui.geometry.Offset(w * 2f / 3f, h), paint)
-            canvas.drawLine(
-                androidx.compose.ui.geometry.Offset(0f, h / 3f),
-                androidx.compose.ui.geometry.Offset(w, h / 3f), paint)
-            canvas.drawLine(
-                androidx.compose.ui.geometry.Offset(0f, h * 2f / 3f),
-                androidx.compose.ui.geometry.Offset(w, h * 2f / 3f), paint)
-        }
+        val color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.25f)
+        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f)
+        // Vertical lines
+        drawLine(color, start = androidx.compose.ui.geometry.Offset(w/3f, 0f),
+            end = androidx.compose.ui.geometry.Offset(w/3f, h), strokeWidth = 1f)
+        drawLine(color, start = androidx.compose.ui.geometry.Offset(w*2f/3f, 0f),
+            end = androidx.compose.ui.geometry.Offset(w*2f/3f, h), strokeWidth = 1f)
+        // Horizontal lines
+        drawLine(color, start = androidx.compose.ui.geometry.Offset(0f, h/3f),
+            end = androidx.compose.ui.geometry.Offset(w, h/3f), strokeWidth = 1f)
+        drawLine(color, start = androidx.compose.ui.geometry.Offset(0f, h*2f/3f),
+            end = androidx.compose.ui.geometry.Offset(w, h*2f/3f), strokeWidth = 1f)
     }
 }
 
