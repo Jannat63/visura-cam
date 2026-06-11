@@ -16,7 +16,7 @@ import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private const val TAG = "VisuraCam"
+private const val TAG = "AJCam"
 
 @Singleton
 class CameraManager @Inject constructor(
@@ -25,7 +25,11 @@ class CameraManager @Inject constructor(
     private var provider: ProcessCameraProvider? = null
     private var camera: Camera? = null
     private var imgCapture: ImageCapture? = null
-    private val executor: ExecutorService = Executors.newSingleThreadExecutor()
+    val executor: ExecutorService = Executors.newSingleThreadExecutor()
+
+    // Store references for re-binding after switches
+    private var savedOwner: LifecycleOwner? = null
+    private var savedPreview: PreviewView? = null
 
     private val _state = MutableStateFlow<CamState>(CamState.Idle)
     val state: StateFlow<CamState> = _state
@@ -33,50 +37,81 @@ class CameraManager @Inject constructor(
     var currentSelector: CameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
         private set
 
-    fun startCamera(owner: LifecycleOwner, previewView: PreviewView,
-                    selector: CameraSelector = CameraSelector.DEFAULT_BACK_CAMERA) {
+    // Fix 4: Flash state
+    private var torchEnabled = false
+
+    fun startCamera(
+        owner: LifecycleOwner,
+        previewView: PreviewView,
+        selector: CameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+    ) {
+        savedOwner = owner
+        savedPreview = previewView
         currentSelector = selector
-        ProcessCameraProvider.getInstance(context).also { future ->
-            future.addListener({
-                try {
-                    val p = future.get()
-                    provider = p
-                    bind(p, owner, previewView, selector)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Provider failed", e)
-                    _state.value = CamState.Error(e.message ?: "Init failed")
-                }
-            }, ContextCompat.getMainExecutor(context))
-        }
+
+        ProcessCameraProvider.getInstance(context).addListener({
+            try {
+                val p = ProcessCameraProvider.getInstance(context).get()
+                provider = p
+                bind(p, owner, previewView, selector)
+            } catch (e: Exception) {
+                Log.e(TAG, "Provider failed", e)
+                _state.value = CamState.Error(e.message ?: "Init failed")
+            }
+        }, ContextCompat.getMainExecutor(context))
     }
 
-    private fun bind(p: ProcessCameraProvider, owner: LifecycleOwner,
-                     previewView: PreviewView, selector: CameraSelector) {
+    private fun bind(
+        p: ProcessCameraProvider,
+        owner: LifecycleOwner,
+        previewView: PreviewView,
+        selector: CameraSelector
+    ) {
         p.unbindAll()
+
         val preview = Preview.Builder().build()
             .also { it.setSurfaceProvider(previewView.surfaceProvider) }
 
         imgCapture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
             .setJpegQuality(97)
+            // Fix 7: Set target rotation so images save correctly
+            .setTargetRotation(previewView.display?.rotation ?: android.view.Surface.ROTATION_0)
             .build()
 
         try {
             camera = p.bindToLifecycle(owner, selector, preview, imgCapture!!)
             currentSelector = selector
-            _state.value = CamState.Ready(selector == CameraSelector.DEFAULT_FRONT_CAMERA)
-            Log.d(TAG, "Bound: front=${selector == CameraSelector.DEFAULT_FRONT_CAMERA}")
+
+            // Fix 2: Log actual zoom range for debugging
+            val maxZoom = camera?.cameraInfo?.zoomState?.value?.maxZoomRatio ?: 1f
+            Log.d(TAG, "Camera bound. Max zoom: ${maxZoom}x, front=${selector == CameraSelector.DEFAULT_FRONT_CAMERA}")
+
+            _state.value = CamState.Ready(
+                isFront = selector == CameraSelector.DEFAULT_FRONT_CAMERA,
+                maxZoom = maxZoom
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Bind failed", e)
             _state.value = CamState.Error(e.message ?: "Bind failed")
         }
     }
 
-    fun switchCamera(owner: LifecycleOwner, previewView: PreviewView) {
+    // Fix 3: Camera switch uses stored references
+    fun switchCamera() {
+        val owner = savedOwner ?: return
+        val preview = savedPreview ?: return
         val next = if (currentSelector == CameraSelector.DEFAULT_BACK_CAMERA)
             CameraSelector.DEFAULT_FRONT_CAMERA
         else CameraSelector.DEFAULT_BACK_CAMERA
-        provider?.let { bind(it, owner, previewView, next) }
+        provider?.let { bind(it, owner, preview, next) }
+    }
+
+    // Overload for explicit switch from UI
+    fun switchCamera(owner: LifecycleOwner, previewView: PreviewView) {
+        savedOwner = owner
+        savedPreview = previewView
+        switchCamera()
     }
 
     fun takePicture(
@@ -87,28 +122,70 @@ class CameraManager @Inject constructor(
         imgCapture?.takePicture(options, executor,
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(out: ImageCapture.OutputFileResults) = onSaved(out)
-                override fun onError(e: ImageCaptureException) = onError(e)
+                override fun onError(e: ImageCaptureException) { Log.e(TAG, "Capture error", e); onError(e) }
             }
-        ) ?: Log.e(TAG, "ImageCapture null")
+        ) ?: Log.e(TAG, "ImageCapture null - camera not ready")
     }
 
-    fun setFlash(on: Boolean) {
-        imgCapture?.flashMode = if (on) ImageCapture.FLASH_MODE_ON
-                                 else ImageCapture.FLASH_MODE_OFF
+    // Fix 4: Proper flash + torch
+    fun setFlash(mode: FlashSetting) {
+        when (mode) {
+            FlashSetting.OFF   -> {
+                imgCapture?.flashMode = ImageCapture.FLASH_MODE_OFF
+                camera?.cameraControl?.enableTorch(false)
+                torchEnabled = false
+            }
+            FlashSetting.AUTO  -> {
+                imgCapture?.flashMode = ImageCapture.FLASH_MODE_AUTO
+                camera?.cameraControl?.enableTorch(false)
+                torchEnabled = false
+            }
+            FlashSetting.ON    -> {
+                imgCapture?.flashMode = ImageCapture.FLASH_MODE_ON
+                camera?.cameraControl?.enableTorch(false)
+                torchEnabled = false
+            }
+            FlashSetting.TORCH -> {
+                imgCapture?.flashMode = ImageCapture.FLASH_MODE_OFF
+                camera?.cameraControl?.enableTorch(true)
+                torchEnabled = true
+            }
+        }
     }
 
-    fun setZoomRatio(ratio: Float) { camera?.cameraControl?.setZoomRatio(ratio) }
-    fun setZoom(linear: Float)     { camera?.cameraControl?.setLinearZoom(linear) }
+    // Fix 2: Proper zoom using CameraX zoom ratio
+    fun setZoomRatio(ratio: Float) {
+        val maxZoom = camera?.cameraInfo?.zoomState?.value?.maxZoomRatio ?: 10f
+        val clamped = ratio.coerceIn(1f, maxZoom)
+        camera?.cameraControl?.setZoomRatio(clamped)
+        Log.d(TAG, "Zoom set: ${clamped}x (max: ${maxZoom}x)")
+    }
+
+    fun getMaxZoom(): Float =
+        camera?.cameraInfo?.zoomState?.value?.maxZoomRatio ?: 10f
+
     fun tapFocus(x: Float, y: Float, w: Float, h: Float) {
-        val pt = SurfaceOrientedMeteringPointFactory(w, h).createPoint(x, y)
-        camera?.cameraControl?.startFocusAndMetering(FocusMeteringAction.Builder(pt).build())
+        val factory = SurfaceOrientedMeteringPointFactory(w, h)
+        val pt = factory.createPoint(x, y)
+        val action = FocusMeteringAction.Builder(pt)
+            .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+        camera?.cameraControl?.startFocusAndMetering(action)
     }
+
     fun getZoomState() = camera?.cameraInfo?.zoomState
-    fun shutdown() { provider?.unbindAll(); executor.shutdown() }
+
+    fun shutdown() {
+        if (torchEnabled) camera?.cameraControl?.enableTorch(false)
+        provider?.unbindAll()
+        executor.shutdown()
+    }
 }
+
+enum class FlashSetting { OFF, AUTO, ON, TORCH }
 
 sealed class CamState {
     object Idle : CamState()
-    data class Ready(val isFront: Boolean) : CamState()
+    data class Ready(val isFront: Boolean, val maxZoom: Float = 10f) : CamState()
     data class Error(val msg: String) : CamState()
 }

@@ -1,12 +1,6 @@
 package com.visura.cam.ui.viewfinder
 
-import android.content.ContentValues
-import android.content.Context
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
-import android.view.MotionEvent
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
@@ -19,222 +13,152 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.visura.cam.camera.CamState
-import com.visura.cam.utils.ProRenderEngine
+import com.visura.cam.camera.FlashSetting
 
-// ── Colour Palette ─────────────────────────────────────────────
 object VC {
-    val Bg          = Color(0xFF0A0A0A)
-    val Surface     = Color(0xFF181818)
-    val Accent      = Color(0xFFB8F026)
-    val AccentDark  = Color(0xFF8AB81C)
-    val White       = Color(0xFFFFFFFF)
-    val Grey        = Color(0xFFAAAAAA)
-    val DarkGrey    = Color(0xFF555555)
-    val Glass       = Color(0xCC000000)
-    val GlassMid    = Color(0x88000000)
-    val Red         = Color(0xFFE53935)
-    val Green       = Color(0xFF4CAF50)
-    val Yellow      = Color(0xFFFFB300)
+    val Bg         = Color(0xFF0A0A0A)
+    val Surface    = Color(0xFF181818)
+    val Accent     = Color(0xFFB8F026)
+    val White      = Color(0xFFFFFFFF)
+    val Grey       = Color(0xFFAAAAAA)
+    val DarkGrey   = Color(0xFF444444)
+    val Glass      = Color(0xCC000000)
+    val Red        = Color(0xFFE53935)
+    val Green      = Color(0xFF4CAF50)
+    val Yellow     = Color(0xFFFFB300)
 }
 
 @Composable
 fun ViewfinderScreen(vm: ViewfinderViewModel = hiltViewModel()) {
-    val context       = LocalContext.current
-    val lifecycle     = LocalLifecycleOwner.current
-    val state         by vm.uiState.collectAsState()
-    val camState      by vm.camState.collectAsState()
-    val lastShotInfo  by vm.lastShotInfo.collectAsState()
-    val lastPhotoUri  by vm.lastPhotoUri.collectAsState()
-    val zoomState     by vm.cameraManager.getZoomState()
-        ?.observeAsState() ?: remember { mutableStateOf(null) }
+    val ctx       = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current
+    val state     by vm.uiState.collectAsState()
+    val camState  by vm.camState.collectAsState()
+    val shotInfo  by vm.lastShotInfo.collectAsState()
+    val lastUri   by vm.lastPhotoUri.collectAsState()
+    val zoomState by vm.cameraManager.getZoomState()?.observeAsState() ?: remember { mutableStateOf(null) }
 
-    // PreviewView reference passed into ViewModel
     val previewView = remember {
-        PreviewView(context).apply {
+        PreviewView(ctx).apply {
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
             scaleType = PreviewView.ScaleType.FILL_CENTER
         }
     }
 
-    // Start camera when composable is ready
-    LaunchedEffect(Unit) {
-        vm.startCamera(lifecycle, previewView)
-    }
+    LaunchedEffect(Unit) { vm.startCamera(lifecycle, previewView) }
+
+    // Fix 2: Get actual max zoom from camera
+    val maxZoom = (camState as? CamState.Ready)?.maxZoom ?: 10f
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(VC.Bg)
-            // Pinch-to-zoom
             .pointerInput(Unit) {
-                detectTransformGestures { _, _, zoom, _ ->
-                    vm.onPinchZoom(zoom)
-                }
+                detectTransformGestures { _, _, zoom, _ -> vm.onPinchZoom(zoom) }
             }
     ) {
+        // Camera preview
+        AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
 
-        // ── 1. Camera Preview ─────────────────────────────────────
-        AndroidView(
-            factory = { previewView },
-            modifier = Modifier.fillMaxSize()
-                .then(
-                    if (state.gridEnabled)
-                        Modifier
-                    else Modifier
-                )
-        )
+        // Grid
+        if (state.gridEnabled) GridOverlay(Modifier.fillMaxSize())
 
-        // ── 2. Grid overlay ───────────────────────────────────────
-        if (state.gridEnabled) {
-            GridOverlay(modifier = Modifier.fillMaxSize())
-        }
+        // Top bar
+        TopBar(state, vm, Modifier
+            .fillMaxWidth().align(Alignment.TopCenter)
+            .statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp))
 
-        // ── 3. Top Bar ────────────────────────────────────────────
-        TopBar(
-            state    = state,
-            onFlash  = vm::toggleFlash,
-            onTimer  = vm::toggleTimer,
-            onRatio  = vm::cycleAspectRatio,
-            onSettings = vm::toggleSettings,
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-        )
+        // WB badge
+        WbBadge(state.wbFixActive, vm::toggleWbFix,
+            Modifier.align(Alignment.TopStart).statusBarsPadding()
+                .padding(start = 12.dp, top = 60.dp))
 
-        // ── 4. WB Fix badge ───────────────────────────────────────
-        WbFixBadge(
-            active   = state.wbFixActive,
-            onToggle = vm::toggleWbFix,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(start = 12.dp, top = 60.dp)
-        )
-
-        // ── 5. Bottom Controls ────────────────────────────────────
+        // Bottom controls
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
+            modifier = Modifier.fillMaxWidth()
+                .align(Alignment.BottomCenter).navigationBarsPadding()
         ) {
-            // Zoom row
+            // Fix 2: Dynamic zoom bar based on actual max zoom
             ZoomBar(
                 current  = state.zoom,
+                maxZoom  = maxZoom,
                 onChange = vm::setZoom,
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(bottom = 12.dp)
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 12.dp)
             )
-
-            // Mode selector
-            ModeRow(
-                selected = state.mode,
-                onSelect = vm::setMode,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-            )
-
-            // Shutter row
+            ModeRow(state.mode, vm::setMode,
+                Modifier.fillMaxWidth().padding(bottom = 16.dp))
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 28.dp)
-                    .padding(bottom = 28.dp),
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = 28.dp).padding(bottom = 28.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Last photo thumbnail
-                LastPhotoThumb(
-                    uri     = lastPhotoUri,
-                    modifier = Modifier
-                        .size(60.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable { vm.openGallery(context) }
-                )
-
-                // Shutter
-                ShutterBtn(
-                    mode        = state.mode,
-                    isCapturing = state.isCapturing,
-                    onClick     = { vm.capture(context) },
-                    modifier    = Modifier.size(80.dp)
-                )
-
-                // Flip camera
-                IconBtn(
-                    icon    = Icons.Default.Cameraswitch,
-                    size    = 60.dp,
-                    onClick = { vm.flipCamera(lifecycle, previewView) }
-                )
+                GalleryThumb(lastUri, Modifier.size(60.dp).clip(RoundedCornerShape(10.dp))
+                    .clickable { vm.openGallery(ctx) })
+                ShutterBtn(state.mode, state.isCapturing, { vm.capture(ctx) }, Modifier.size(80.dp))
+                // Fix 3: Pass lifecycle and previewView for camera switch
+                IconBtn(Icons.Default.Cameraswitch, 60.dp) {
+                    vm.flipCamera(lifecycle, previewView)
+                }
             }
         }
 
-        // ── 6. Shot info overlay ──────────────────────────────────
-        lastShotInfo?.let { info ->
-            ShotInfoCard(
-                info     = info,
-                onDismiss = vm::dismissShotInfo,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 200.dp, start = 12.dp, end = 12.dp)
-            )
+        // Shot info overlay
+        shotInfo?.let { info ->
+            ShotInfoCard(info, vm::dismissShotInfo,
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
+                    .padding(bottom = 200.dp, start = 12.dp, end = 12.dp))
         }
 
-        // ── 7. Settings panel ─────────────────────────────────────
+        // Processing indicator
+        if (state.isProcessing) {
+            Box(Modifier.align(Alignment.Center)
+                .clip(RoundedCornerShape(12.dp)).background(VC.Glass).padding(20.dp),
+                contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CircularProgressIndicator(color = VC.Accent, modifier = Modifier.size(36.dp))
+                    Text("AI Rendering…", color = VC.White, fontSize = 13.sp)
+                }
+            }
+        }
+
+        // Settings
         if (state.showSettings) {
-            SettingsSheet(
-                state    = state,
-                onClose  = vm::toggleSettings,
-                onGrid   = vm::toggleGrid,
-                vm       = vm,
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
+            SettingsSheet(state, vm, Modifier.align(Alignment.BottomCenter))
         }
 
-        // ── 8. Camera error ───────────────────────────────────────
+        // Error
         (camState as? CamState.Error)?.let { err ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(VC.Bg.copy(alpha = 0.9f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
+            Box(Modifier.fillMaxSize().background(VC.Bg.copy(0.92f)),
+                Alignment.Center) {
+                Column(Modifier.padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(32.dp)
-                ) {
-                    Text("Camera Error", color = VC.White,
-                        fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                    Text(err.msg, color = VC.Grey, fontSize = 13.sp,
-                        textAlign = TextAlign.Center)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Camera Error", color = VC.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                    Text(err.msg, color = VC.Grey, fontSize = 13.sp, textAlign = TextAlign.Center)
                     Button(onClick = { vm.startCamera(lifecycle, previewView) },
-                        colors = ButtonDefaults.buttonColors(containerColor = VC.Accent)
-                    ) {
+                        colors = ButtonDefaults.buttonColors(containerColor = VC.Accent)) {
                         Text("Retry", color = VC.Bg, fontWeight = FontWeight.Bold)
                     }
                 }
@@ -243,355 +167,230 @@ fun ViewfinderScreen(vm: ViewfinderViewModel = hiltViewModel()) {
     }
 }
 
-// ── Top Bar ────────────────────────────────────────────────────
-
 @Composable
-fun TopBar(
-    state: VfState,
-    onFlash: () -> Unit,
-    onTimer: () -> Unit,
-    onRatio: () -> Unit,
-    onSettings: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = onFlash) {
+fun TopBar(state: VfState, vm: ViewfinderViewModel, modifier: Modifier) {
+    Row(modifier, Arrangement.SpaceBetween, Alignment.CenterVertically) {
+        // Fix 4: Flash button with all modes
+        IconButton(onClick = vm::toggleFlash) {
             Icon(
                 imageVector = when (state.flash) {
-                    FlashMode.OFF   -> Icons.Default.FlashOff
-                    FlashMode.AUTO  -> Icons.Default.FlashAuto
-                    FlashMode.ON    -> Icons.Default.FlashOn
-                    FlashMode.TORCH -> Icons.Default.Lightbulb
+                    FlashSetting.OFF   -> Icons.Default.FlashOff
+                    FlashSetting.AUTO  -> Icons.Default.FlashAuto
+                    FlashSetting.ON    -> Icons.Default.FlashOn
+                    FlashSetting.TORCH -> Icons.Default.Lightbulb
                 },
                 contentDescription = "Flash",
-                tint = if (state.flash == FlashMode.ON || state.flash == FlashMode.TORCH)
-                    VC.Accent else VC.Grey,
+                tint = when (state.flash) {
+                    FlashSetting.OFF  -> VC.Grey
+                    else              -> VC.Accent
+                },
                 modifier = Modifier.size(26.dp)
             )
         }
-
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Chip(text = state.timerLabel, onClick = onTimer)
-            Chip(text = state.aspectRatio, onClick = onRatio)
+            Chip(state.timerLabel, vm::toggleTimer)
+            Chip(state.aspectRatio, vm::cycleAspectRatio)
         }
-
-        IconButton(onClick = onSettings) {
-            Icon(Icons.Default.Settings, "Settings",
+        IconButton(onClick = vm::toggleSettings) {
+            Icon(imageVector = Icons.Default.Settings, contentDescription = "Settings",
                 tint = VC.Grey, modifier = Modifier.size(26.dp))
         }
     }
 }
 
 @Composable
-fun Chip(text: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(VC.Glass)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 5.dp)
-    ) {
-        Text(text, color = VC.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-    }
-}
-
-// ── WB Fix Badge ──────────────────────────────────────────────
-
-@Composable
-fun WbFixBadge(active: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+fun WbBadge(active: Boolean, onToggle: () -> Unit, modifier: Modifier) {
     Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(VC.Glass)
-            .clickable(onClick = onToggle)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        modifier.clip(RoundedCornerShape(20.dp)).background(VC.Glass)
+            .clickable(onClick = onToggle).padding(horizontal = 10.dp, vertical = 5.dp),
+        Alignment.CenterVertically, Arrangement.spacedBy(6.dp)
     ) {
-        Box(
-            modifier = Modifier.size(7.dp).clip(CircleShape)
-                .background(if (active) VC.Green else VC.Yellow)
-        )
+        Box(Modifier.size(7.dp).clip(CircleShape)
+            .background(if (active) VC.Green else VC.Yellow))
         Text(
-            text = if (active) "WB Fix" else "WB Off",
+            if (active) "WB Fix" else "WB Off",
             color = if (active) VC.Green else VC.Yellow,
             fontSize = 12.sp, fontWeight = FontWeight.Medium
         )
     }
 }
 
-// ── Zoom Bar ──────────────────────────────────────────────────
-
 @Composable
-fun ZoomBar(current: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier) {
-    val levels = listOf(
-        Pair(0.5f, "0.6"),
-        Pair(1.0f, "1×"),
-        Pair(2.0f, "2"),
-        Pair(5.0f, "5")
-    )
+fun Chip(text: String, onClick: () -> Unit) {
+    Box(Modifier.clip(RoundedCornerShape(20.dp)).background(VC.Glass)
+        .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 5.dp)) {
+        Text(text, color = VC.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+// Fix 2: Dynamic zoom bar - shows real zoom levels based on camera capability
+@Composable
+fun ZoomBar(current: Float, maxZoom: Float, onChange: (Float) -> Unit, modifier: Modifier) {
+    // Build zoom levels dynamically based on what the camera supports
+    val levels = buildList {
+        add(Pair(1.0f, "1×"))
+        if (maxZoom >= 2f)  add(Pair(2.0f,  "2×"))
+        if (maxZoom >= 5f)  add(Pair(5.0f,  "5×"))
+        if (maxZoom >= 10f) add(Pair(10.0f, "10×"))
+        if (maxZoom >= 30f) add(Pair(30.0f, "30×"))
+        if (maxZoom >= 60f) add(Pair(60.0f, "60×"))
+    }
     Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(VC.Glass)
+        modifier.clip(RoundedCornerShape(20.dp)).background(VC.Glass)
             .padding(horizontal = 4.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         levels.forEach { (value, label) ->
-            val sel = kotlin.math.abs(current - value) < 0.1f
+            val sel = kotlin.math.abs(current - value) < 0.15f
             Box(
-                modifier = Modifier
-                    .clip(CircleShape)
+                Modifier.clip(CircleShape)
                     .background(if (sel) VC.Accent else Color.Transparent)
                     .clickable { onChange(value) }
                     .padding(horizontal = 14.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center
+                Alignment.Center
             ) {
-                Text(
-                    text = label,
+                Text(label,
                     color = if (sel) VC.Bg else VC.White,
                     fontSize = 13.sp,
-                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal
-                )
+                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
             }
         }
     }
 }
 
-// ── Mode Selector ─────────────────────────────────────────────
-
 @Composable
-fun ModeRow(selected: ShootMode, onSelect: (ShootMode) -> Unit, modifier: Modifier = Modifier) {
-    val modes = listOf(ShootMode.NIGHT, ShootMode.PORTRAIT, ShootMode.PHOTO,
-        ShootMode.VIDEO, ShootMode.PRO, ShootMode.MACRO)
-    LazyRow(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-        contentPadding = PaddingValues(horizontal = 24.dp)
-    ) {
+fun ModeRow(selected: ShootMode, onSelect: (ShootMode) -> Unit, modifier: Modifier) {
+    val modes = ShootMode.values().toList()
+    LazyRow(modifier, horizontalArrangement = Arrangement.spacedBy(24.dp),
+        contentPadding = PaddingValues(horizontal = 24.dp)) {
         items(modes) { mode ->
-            val sel = mode == selected
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.clickable { onSelect(mode) }
             ) {
-                Text(
-                    text = mode.label,
-                    color = if (sel) VC.Accent else VC.Grey,
+                Text(mode.label,
+                    color = if (mode == selected) VC.Accent else VC.Grey,
                     fontSize = 13.sp,
-                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal
-                )
-                if (sel) Box(
-                    modifier = Modifier.padding(top = 3.dp)
-                        .size(4.dp).clip(CircleShape).background(VC.Accent)
-                )
+                    fontWeight = if (mode == selected) FontWeight.Bold else FontWeight.Normal)
+                if (mode == selected)
+                    Box(Modifier.padding(top = 3.dp).size(4.dp).clip(CircleShape).background(VC.Accent))
             }
         }
     }
 }
 
-// ── Shutter Button ────────────────────────────────────────────
-
 @Composable
-fun ShutterBtn(
-    mode: ShootMode,
-    isCapturing: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val isVideo = mode == ShootMode.VIDEO
-    Box(
-        modifier = modifier
-            .clip(CircleShape)
-            .border(3.dp, VC.White, CircleShape)
-            .clickable(enabled = !isCapturing, onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
+fun ShutterBtn(mode: ShootMode, isCapturing: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    Box(modifier.clip(CircleShape).border(3.dp, VC.White, CircleShape)
+        .clickable(enabled = !isCapturing, onClick = onClick),
+        Alignment.Center) {
         if (isCapturing) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(48.dp),
-                color = VC.Accent, strokeWidth = 3.dp
-            )
+            CircularProgressIndicator(Modifier.size(48.dp), color = VC.Accent, strokeWidth = 3.dp)
         } else {
-            Box(
-                modifier = Modifier.size(64.dp).clip(CircleShape)
-                    .background(if (isVideo) VC.Red else VC.White)
-            )
+            Box(Modifier.size(64.dp).clip(CircleShape)
+                .background(if (mode == ShootMode.VIDEO) VC.Red else VC.White))
         }
     }
 }
 
-// ── Icon Button ───────────────────────────────────────────────
-
 @Composable
-fun IconBtn(
-    icon: ImageVector,
-    size: androidx.compose.ui.unit.Dp,
-    onClick: () -> Unit,
-    tint: Color = VC.White
-) {
-    IconButton(onClick = onClick, modifier = Modifier.size(size)) {
+fun IconBtn(icon: ImageVector, size: Dp, onClick: () -> Unit, tint: Color = VC.White) {
+    IconButton(onClick, Modifier.size(size)) {
         Icon(imageVector = icon, contentDescription = null, tint = tint,
             modifier = Modifier.size(size * 0.55f))
     }
 }
 
-// ── Last Photo Thumbnail ──────────────────────────────────────
-
 @Composable
-fun LastPhotoThumb(uri: Uri?, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.background(VC.Surface, RoundedCornerShape(10.dp)),
-        contentAlignment = Alignment.Center
-    ) {
-        if (uri != null) {
-            AsyncImage(
-                model = uri, contentDescription = "Last photo",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
-            )
-        } else {
+fun GalleryThumb(uri: Uri?, modifier: Modifier) {
+    Box(modifier.background(VC.Surface, RoundedCornerShape(10.dp)), Alignment.Center) {
+        if (uri != null)
+            AsyncImage(uri, "Last photo", Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
+                contentScale = ContentScale.Crop)
+        else
             Icon(imageVector = Icons.Default.PhotoLibrary, contentDescription = null,
                 tint = VC.DarkGrey, modifier = Modifier.size(28.dp))
-        }
     }
 }
 
-// ── Grid Overlay ──────────────────────────────────────────────
-
 @Composable
-fun GridOverlay(modifier: Modifier = Modifier) {
-    androidx.compose.foundation.Canvas(modifier = modifier) {
-        val w = size.width; val h = size.height
-        val color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.25f)
-        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f)
-        // Vertical lines
-        drawLine(color, start = androidx.compose.ui.geometry.Offset(w/3f, 0f),
-            end = androidx.compose.ui.geometry.Offset(w/3f, h), strokeWidth = 1f)
-        drawLine(color, start = androidx.compose.ui.geometry.Offset(w*2f/3f, 0f),
-            end = androidx.compose.ui.geometry.Offset(w*2f/3f, h), strokeWidth = 1f)
-        // Horizontal lines
-        drawLine(color, start = androidx.compose.ui.geometry.Offset(0f, h/3f),
-            end = androidx.compose.ui.geometry.Offset(w, h/3f), strokeWidth = 1f)
-        drawLine(color, start = androidx.compose.ui.geometry.Offset(0f, h*2f/3f),
-            end = androidx.compose.ui.geometry.Offset(w, h*2f/3f), strokeWidth = 1f)
+fun GridOverlay(modifier: Modifier) {
+    androidx.compose.foundation.Canvas(modifier) {
+        val c = Color.White.copy(alpha = 0.22f)
+        drawLine(c, androidx.compose.ui.geometry.Offset(size.width/3f, 0f),
+            androidx.compose.ui.geometry.Offset(size.width/3f, size.height), 1f)
+        drawLine(c, androidx.compose.ui.geometry.Offset(size.width*2f/3f, 0f),
+            androidx.compose.ui.geometry.Offset(size.width*2f/3f, size.height), 1f)
+        drawLine(c, androidx.compose.ui.geometry.Offset(0f, size.height/3f),
+            androidx.compose.ui.geometry.Offset(size.width, size.height/3f), 1f)
+        drawLine(c, androidx.compose.ui.geometry.Offset(0f, size.height*2f/3f),
+            androidx.compose.ui.geometry.Offset(size.width, size.height*2f/3f), 1f)
     }
 }
 
-// ── Shot Info Card ────────────────────────────────────────────
-
 @Composable
-fun ShotInfoCard(
-    info: ProRenderEngine.ShotInfo,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    LaunchedEffect(info) {
-        kotlinx.coroutines.delay(4000)
-        onDismiss()
-    }
+fun ShotInfoCard(info: Map<String, String>, onDismiss: () -> Unit, modifier: Modifier) {
+    LaunchedEffect(info) { kotlinx.coroutines.delay(5000); onDismiss() }
     Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(VC.Glass)
-            .border(0.5.dp, VC.Accent.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
-            .clickable(onClick = onDismiss)
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier.clip(RoundedCornerShape(14.dp)).background(VC.Glass)
+            .border(0.5.dp, VC.Accent.copy(0.4f), RoundedCornerShape(14.dp))
+            .clickable(onClick = onDismiss).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("VISURA CAM", color = VC.Accent, fontSize = 11.sp,
+        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+            Text("AJ CAM", color = VC.Accent, fontSize = 11.sp,
                 fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             Text("Ahsan Jannat", color = VC.Grey, fontSize = 11.sp)
         }
-        Divider(color = VC.Accent.copy(alpha = 0.2f), thickness = 0.5.dp)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            ExposureBlock("ISO", info.iso.toString())
-            ExposureBlock("SHUTTER", info.shutterFraction)
-            ExposureBlock("f/", info.aperture.toString())
+        Divider(color = VC.Accent.copy(0.2f), thickness = 0.5.dp)
+        // Exposure row
+        Row(Modifier.fillMaxWidth(), Arrangement.SpaceEvenly) {
+            info["ISO"]?.let     { ExpBlock("ISO", it) }
+            info["Shutter"]?.let { ExpBlock("SHUTTER", it) }
+            info["f/"]?.let      { ExpBlock("f/", it) }
         }
-        Divider(color = Color.White.copy(alpha = 0.06f), thickness = 0.5.dp)
-        InfoRow("📷", "Sensor", info.sensorName)
-        InfoRow("🔭", "Lens",   info.lensName)
-        InfoRow("🎨", "Render", "Pro pipeline · Ahsan Jannat")
+        Divider(color = Color.White.copy(0.06f), thickness = 0.5.dp)
+        info["Lens"]?.let    { InfoRow("🔭", "Lens", it) }
+        info["Scene"]?.let   { InfoRow("🎨", "Scene", it) }
+        info["Render"]?.let  { InfoRow("✨", "Render", it) }
         Text("Tap to dismiss", color = VC.DarkGrey, fontSize = 10.sp,
             modifier = Modifier.align(Alignment.CenterHorizontally))
     }
 }
 
-@Composable
-private fun ExposureBlock(label: String, value: String) {
+@Composable private fun ExpBlock(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, color = VC.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
         Text(label, color = VC.Grey, fontSize = 10.sp, letterSpacing = 0.5.sp)
     }
 }
-
-@Composable
-private fun InfoRow(icon: String, label: String, value: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically) {
+@Composable private fun InfoRow(icon: String, label: String, value: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(icon, fontSize = 13.sp)
-        Text(label, color = VC.DarkGrey, fontSize = 11.sp,
-            modifier = Modifier.width(56.dp))
+        Text(label, color = VC.DarkGrey, fontSize = 11.sp, modifier = Modifier.width(50.dp))
         Text(value, color = VC.Grey, fontSize = 11.sp)
     }
 }
 
-// ── Settings Sheet ────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsSheet(
-    state: VfState,
-    onClose: () -> Unit,
-    onGrid: () -> Unit,
-    vm: ViewfinderViewModel,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = Modifier.fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f))
-            .clickable(onClick = onClose)
-    ) {
+fun SettingsSheet(state: VfState, vm: ViewfinderViewModel, modifier: Modifier) {
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(0.6f)).clickable(onClick = vm::toggleSettings)) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-                .background(VC.Surface)
-                .padding(20.dp)
-                .align(Alignment.BottomCenter)
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                .background(VC.Surface).padding(20.dp).align(Alignment.BottomCenter)
                 .clickable(enabled = false) {}
         ) {
-            // Handle
-            Box(modifier = Modifier
-                .width(40.dp).height(4.dp)
-                .clip(CircleShape).background(VC.DarkGrey)
-                .align(Alignment.CenterHorizontally)
-            )
+            Box(Modifier.width(40.dp).height(4.dp).clip(CircleShape)
+                .background(VC.DarkGrey).align(Alignment.CenterHorizontally))
             Spacer(Modifier.height(16.dp))
-            Text("Settings", color = VC.White, fontSize = 17.sp,
-                fontWeight = FontWeight.Medium)
-            Spacer(Modifier.height(16.dp))
-
-            SettingToggle("Grid lines", state.gridEnabled, onGrid)
-            SettingToggle("WB Color Fix", state.wbFixActive, vm::toggleWbFix)
-            SettingToggle("Save location", state.saveLocation, vm::toggleLocation)
-            SettingToggle("Shutter sound", state.shutterSound, vm::toggleShutterSound)
-
+            Text("Settings", color = VC.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(12.dp))
-            Text("By Ahsan Jannat · Visura Cam v1.0",
-                color = VC.DarkGrey, fontSize = 11.sp,
+            SettingRow("Grid lines",  state.gridEnabled,    vm::toggleGrid)
+            SettingRow("AI WB Fix",   state.wbFixActive,    vm::toggleWbFix)
+            SettingRow("Location tag", state.saveLocation,  vm::toggleLocation)
+            SettingRow("Shutter sound", state.shutterSound, vm::toggleShutterSound)
+            Spacer(Modifier.height(12.dp))
+            Text("AJ Cam v1.0 · Ahsan Jannat", color = VC.DarkGrey, fontSize = 11.sp,
                 modifier = Modifier.align(Alignment.CenterHorizontally))
             Spacer(Modifier.height(8.dp))
         }
@@ -599,42 +398,30 @@ fun SettingsSheet(
 }
 
 @Composable
-fun SettingToggle(label: String, value: Boolean, onToggle: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+fun SettingRow(label: String, value: Boolean, onToggle: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        Arrangement.SpaceBetween, Alignment.CenterVertically) {
         Text(label, color = VC.White, fontSize = 14.sp)
-        Switch(
-            checked = value,
-            onCheckedChange = { onToggle() },
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = VC.Bg,
-                checkedTrackColor = VC.Accent
-            )
-        )
+        Switch(value, { onToggle() }, colors = SwitchDefaults.colors(
+            checkedThumbColor = VC.Bg, checkedTrackColor = VC.Accent))
     }
 }
-
-// ── State & Enums ─────────────────────────────────────────────
 
 enum class ShootMode(val label: String) {
     NIGHT("NIGHT"), PORTRAIT("PORTRAIT"), PHOTO("PHOTO"),
     VIDEO("VIDEO"), PRO("PRO"), MACRO("MACRO")
 }
 
-enum class FlashMode { OFF, AUTO, ON, TORCH }
-
 data class VfState(
     val mode: ShootMode = ShootMode.PHOTO,
-    val flash: FlashMode = FlashMode.AUTO,
+    val flash: FlashSetting = FlashSetting.AUTO,
     val zoom: Float = 1.0f,
     val wbFixActive: Boolean = true,
     val gridEnabled: Boolean = false,
     val timerLabel: String = "OFF",
     val aspectRatio: String = "4:3",
     val isCapturing: Boolean = false,
+    val isProcessing: Boolean = false,
     val showSettings: Boolean = false,
     val saveLocation: Boolean = false,
     val shutterSound: Boolean = true

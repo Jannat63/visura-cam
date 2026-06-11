@@ -1,15 +1,8 @@
 <resources>
-    <string name="app_name">Visura Cam</string>
+    <string name="app_name">AJ Cam</string>
     <string name="app_owner">Ahsan Jannat</string>
     <string name="app_tagline">Professional Camera by Ahsan Jannat</string>
-    <string name="permission_camera">Camera permission is required to take photos</string>
-    <string name="permission_storage">Storage permission is required to save photos</string>
-    <string name="permission_audio">Microphone permission is required to record video</string>
-    <string name="wb_fix_on">WB Fix active — yellow cast corrected</string>
-    <string name="wb_fix_off">WB Fix disabled</string>
-    <string name="macro_sweet_spot">Perfect — tap to capture</string>
-    <string name="macro_too_close">Too close — move back</string>
-    <string name="macro_too_far">Too far — move closer to 4cm</string>
-    <string name="shot_by">Shot with Visura Cam · Ahsan Jannat</string>
-    <string name="copyright">© Ahsan Jannat — Visura Cam</string>
+    <string name="wb_fix_on">AI WB Fix active</string>
+    <string name="wb_fix_off">AI WB Fix disabled</string>
+    <string name="copyright">© Ahsan Jannat — AJ Cam</string>
 </resources>
