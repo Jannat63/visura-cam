@@ -211,9 +211,9 @@ object AIRenderEngine {
         // Build per-pixel LUT
         val lut = IntArray(256) { i ->
             val t = i / 255f
-            val lifted  = t + shadowLift * (1f - t).pow(3f)
+            val lifted  = t + shadowLift * (1f - t) * (1f - t) * (1f - t)
             val punched = lifted + punch * sin(lifted * PI.toFloat()) * 0.18f
-            val rolled  = punched - hlRoll * punched.pow(3f)
+            val rolled  = punched - hlRoll * punched * punched * punched
             (rolled * 255f).toInt().coerceIn(0, 255)
         }
 

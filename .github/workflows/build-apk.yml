@@ -1,4 +1,4 @@
-name: Build Visura Cam APK
+name: Build AJ Cam APK
 
 on:
   push:
@@ -40,7 +40,6 @@ jobs:
       - name: Create assets folder
         run: mkdir -p app/src/main/assets && echo "placeholder" > app/src/main/assets/scene_detector.tflite
 
-      # Delete old files that no longer exist in codebase
       - name: Remove old source files
         run: |
           rm -f app/src/main/java/com/visura/cam/ai/SceneDetector.kt
@@ -53,29 +52,53 @@ jobs:
           rm -f app/src/main/java/com/visura/cam/utils/BatchColorFixer.kt
           rm -f app/src/main/java/com/visura/cam/utils/ExifWriter.kt
           rm -f app/src/main/java/com/visura/cam/utils/ImageProcessor.kt
-          echo "Old files removed"
           find app/src/main/java -name "*.kt" | sort
 
       - name: Install ImageMagick
         run: sudo apt-get install -y imagemagick
 
-      - name: Generate app icons
+      # Fix 5: Create proper AJ Cam branded icon
+      - name: Generate AJ Cam app icons
         run: |
           mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
-          convert -size 48x48   xc:"#B8F026" PNG24:app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert -size 48x48   xc:"#B8F026" PNG24:app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-          convert -size 72x72   xc:"#B8F026" PNG24:app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert -size 72x72   xc:"#B8F026" PNG24:app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-          convert -size 96x96   xc:"#B8F026" PNG24:app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert -size 96x96   xc:"#B8F026" PNG24:app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-          convert -size 144x144 xc:"#B8F026" PNG24:app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert -size 144x144 xc:"#B8F026" PNG24:app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-          convert -size 192x192 xc:"#B8F026" PNG24:app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          convert -size 192x192 xc:"#B8F026" PNG24:app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+
+          # Create base icon: dark background + yellow-green "AJ" text
+          create_icon() {
+            SIZE=$1
+            OUTPUT=$2
+            FONT_SIZE=$((SIZE * 42 / 192))
+            convert -size ${SIZE}x${SIZE} xc:"#0A0A0A" \
+              -fill "#B8F026" \
+              -draw "roundrectangle 0,0 ${SIZE},${SIZE} $((SIZE/8)),$((SIZE/8))" \
+              -fill "#0A0A0A" \
+              -font DejaVu-Sans-Bold \
+              -pointsize ${FONT_SIZE} \
+              -gravity Center \
+              -annotate 0 "AJ" \
+              -fill "#B8F026" \
+              -draw "line 0,$((SIZE*75/100)) ${SIZE},$((SIZE*75/100))" \
+              -fill "#B8F026" \
+              -pointsize $((FONT_SIZE / 3)) \
+              -annotate +0+$((SIZE*35/100)) "CAM" \
+              PNG24:${OUTPUT}
+          }
+
+          create_icon 48  app/src/main/res/mipmap-mdpi/ic_launcher.png
+          create_icon 48  app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          create_icon 72  app/src/main/res/mipmap-hdpi/ic_launcher.png
+          create_icon 72  app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          create_icon 96  app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          create_icon 96  app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+          create_icon 144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          create_icon 144 app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          create_icon 192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          create_icon 192 app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          echo "Icons created:"
+          ls -lh app/src/main/res/mipmap-xxhdpi/
 
       - name: Cache Gradle packages
         uses: actions/cache@v4
@@ -94,7 +117,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: visura-cam-debug-apk
+          name: ajcam-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 

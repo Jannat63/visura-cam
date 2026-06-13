@@ -260,7 +260,7 @@ fun ZoomBar(current: Float, maxZoom: Float, onChange: (Float) -> Unit, modifier:
 
 @Composable
 fun ModeRow(selected: ShootMode, onSelect: (ShootMode) -> Unit, modifier: Modifier) {
-    val modes = ShootMode.values().toList()
+    val modes = ShootMode.entries.toList()
     LazyRow(modifier, horizontalArrangement = Arrangement.spacedBy(24.dp),
         contentPadding = PaddingValues(horizontal = 24.dp)) {
         items(modes) { mode ->

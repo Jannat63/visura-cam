@@ -9,56 +9,35 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private val Context.dataStore by preferencesDataStore(name = "visura_calibration")
+private val Context.dataStore by preferencesDataStore(name = "ajcam_calibration")
 
-/**
- * CalibrationDataStore — Persists per-lens color correction profiles.
- *
- * Stores R/G/B gain values for each camera lens so calibration
- * survives app restarts. Also stores whether the user has done
- * a white-reference calibration for each lens.
- */
 @Singleton
 class CalibrationDataStore @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val scope = CoroutineScope(Dispatchers.IO)
 
-    fun save(lensId: String, rGain: Float, gGain: Float, bGain: Float) {
+    fun save(lensId: String, r: Float, g: Float, b: Float) {
         scope.launch {
             context.dataStore.edit { prefs ->
-                prefs[floatPreferencesKey("lens_${lensId}_r")] = rGain
-                prefs[floatPreferencesKey("lens_${lensId}_g")] = gGain
-                prefs[floatPreferencesKey("lens_${lensId}_b")] = bGain
-                prefs[floatPreferencesKey("lens_${lensId}_calibrated")] = 1f
+                prefs[floatPreferencesKey("${lensId}_r")] = r
+                prefs[floatPreferencesKey("${lensId}_g")] = g
+                prefs[floatPreferencesKey("${lensId}_b")] = b
             }
         }
     }
 
-    suspend fun load(lensId: String): Triple<Float, Float, Float>? {
-        val prefs = context.dataStore.data.first()
-        val r = prefs[floatPreferencesKey("lens_${lensId}_r")] ?: return null
-        val g = prefs[floatPreferencesKey("lens_${lensId}_g")] ?: return null
-        val b = prefs[floatPreferencesKey("lens_${lensId}_b")] ?: return null
-        return Triple(r, g, b)
-    }
-
-    suspend fun isCalibrated(lensId: String): Boolean {
-        val prefs = context.dataStore.data.first()
-        return (prefs[floatPreferencesKey("lens_${lensId}_calibrated")] ?: 0f) == 1f
-    }
-
-    fun resetToDefaults(lensId: String) {
-        scope.launch {
-            context.dataStore.edit { prefs ->
-                prefs.remove(floatPreferencesKey("lens_${lensId}_r"))
-                prefs.remove(floatPreferencesKey("lens_${lensId}_g"))
-                prefs.remove(floatPreferencesKey("lens_${lensId}_b"))
-                prefs.remove(floatPreferencesKey("lens_${lensId}_calibrated"))
-            }
+    fun load(lensId: String): Triple<Float, Float, Float>? = try {
+        runBlocking {
+            val prefs = context.dataStore.data.first()
+            val r = prefs[floatPreferencesKey("${lensId}_r")] ?: return@runBlocking null
+            val g = prefs[floatPreferencesKey("${lensId}_g")] ?: return@runBlocking null
+            val b = prefs[floatPreferencesKey("${lensId}_b")] ?: return@runBlocking null
+            Triple(r, g, b)
         }
-    }
+    } catch (e: Exception) { null }
 }
