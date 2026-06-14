@@ -113,8 +113,10 @@ fun ViewfinderScreen(vm: ViewfinderViewModel = hiltViewModel()) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                GalleryThumb(lastUri, Modifier.size(60.dp).clip(RoundedCornerShape(10.dp))
-                    .clickable { vm.openGallery(ctx) })
+                GalleryThumb(
+                    uri = lastUri,
+                    modifier = Modifier.size(60.dp).clip(RoundedCornerShape(10.dp)).clickable { vm.openGallery(ctx) }
+                )
                 ShutterBtn(state.mode, state.isCapturing, { vm.capture(ctx) }, Modifier.size(80.dp))
                 // Fix 3: Pass lifecycle and previewView for camera switch
                 IconBtn(Icons.Default.Cameraswitch, 60.dp) {
@@ -169,7 +171,7 @@ fun ViewfinderScreen(vm: ViewfinderViewModel = hiltViewModel()) {
 
 @Composable
 fun TopBar(state: VfState, vm: ViewfinderViewModel, modifier: Modifier) {
-    Row(modifier, Arrangement.SpaceBetween, Alignment.CenterVertically) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         // Fix 4: Flash button with all modes
         IconButton(onClick = vm::toggleFlash) {
             Icon(
@@ -201,9 +203,10 @@ fun TopBar(state: VfState, vm: ViewfinderViewModel, modifier: Modifier) {
 @Composable
 fun WbBadge(active: Boolean, onToggle: () -> Unit, modifier: Modifier) {
     Row(
-        modifier.clip(RoundedCornerShape(20.dp)).background(VC.Glass)
+        modifier = modifier.clip(RoundedCornerShape(20.dp)).background(VC.Glass)
             .clickable(onClick = onToggle).padding(horizontal = 10.dp, vertical = 5.dp),
-        Alignment.CenterVertically, Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(7.dp).clip(CircleShape)
             .background(if (active) VC.Green else VC.Yellow))
