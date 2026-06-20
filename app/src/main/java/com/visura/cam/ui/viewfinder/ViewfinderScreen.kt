@@ -46,9 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -113,9 +111,6 @@ fun ViewfinderScreen(vm: ViewfinderViewModel = hiltViewModel()) {
     val camState  by vm.camState.collectAsState()
     val shotInfo  by vm.lastShotInfo.collectAsState()
     val lastUri   by vm.lastPhotoUri.collectAsState()
-
-    val zoomLiveData = vm.cameraManager.getZoomState()
-    val zoomStateValue by (zoomLiveData?.observeAsState() ?: remember { mutableStateOf(null) })
 
     val previewView = remember {
         PreviewView(ctx).apply {
