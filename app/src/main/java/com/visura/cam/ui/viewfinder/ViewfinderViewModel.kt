@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.view.PreviewView
@@ -19,10 +20,14 @@ import com.visura.cam.camera.FlashSetting
 import com.visura.cam.correction.ColorCorrectionEngine
 import com.visura.cam.utils.ImageSaver
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -37,7 +42,6 @@ class ViewfinderViewModel @Inject constructor(
 
     val camState: StateFlow<CamState> = cameraManager.state
 
-    // Shot info shown after capture: map of label→value
     private val _lastShotInfo = MutableStateFlow<Map<String, String>?>(null)
     val lastShotInfo: StateFlow<Map<String, String>?> = _lastShotInfo
 
@@ -46,21 +50,16 @@ class ViewfinderViewModel @Inject constructor(
 
     private var currentLensId = ColorCorrectionEngine.LENS_MAIN_108MP
 
-    // ── Camera ────────────────────────────────────────────────────
-
     fun startCamera(owner: LifecycleOwner, previewView: PreviewView) {
         cameraManager.startCamera(owner, previewView)
     }
 
     fun flipCamera(owner: LifecycleOwner, previewView: PreviewView) {
         cameraManager.switchCamera(owner, previewView)
-        currentLensId = if (cameraManager.currentSelector ==
-            androidx.camera.core.CameraSelector.DEFAULT_FRONT_CAMERA)
+        currentLensId = if (cameraManager.currentSelector == CameraSelector.DEFAULT_FRONT_CAMERA)
             ColorCorrectionEngine.LENS_SELFIE
         else ColorCorrectionEngine.LENS_MAIN_108MP
     }
-
-    // ── Capture ───────────────────────────────────────────────────
 
     fun capture(context: Context) {
         if (_uiState.value.isCapturing) return
@@ -70,12 +69,10 @@ class ViewfinderViewModel @Inject constructor(
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, filename)
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-            put(MediaStore.Images.Media.RELATIVE_PATH,
-                "${Environment.DIRECTORY_DCIM}/AJCam")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_DCIM}/AJCam")
         }
         val options = ImageCapture.OutputFileOptions
-            .Builder(context.contentResolver,
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            .Builder(context.contentResolver, MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
             .build()
 
         val scene = when (_uiState.value.mode) {
@@ -94,18 +91,14 @@ class ViewfinderViewModel @Inject constructor(
                 _uiState.update { it.copy(isCapturing = false, isProcessing = true) }
 
                 viewModelScope.launch {
-                    uri?.let { savedUri ->
-                        _lastPhotoUri.value = savedUri
-
-                        // Fix 7+8: Background AI processing - doesn't freeze UI
+                    if (uri != null) {
+                        _lastPhotoUri.value = uri
                         if (_uiState.value.wbFixActive) {
-                            imageSaver.processExistingPhoto(context, savedUri, scene, currentLensId)
+                            imageSaver.processExistingPhoto(context, uri, scene, currentLensId)
                         }
-
-                        // Build shot info for overlay
                         _lastShotInfo.value = buildShotInfo(scene)
-                        _uiState.update { it.copy(isProcessing = false) }
-                    } ?: _uiState.update { it.copy(isProcessing = false) }
+                    }
+                    _uiState.update { it.copy(isProcessing = false) }
                 }
             },
             onError = { e: ImageCaptureException ->
@@ -131,8 +124,6 @@ class ViewfinderViewModel @Inject constructor(
 
     fun dismissShotInfo() { _lastShotInfo.value = null }
 
-    // ── Gallery ───────────────────────────────────────────────────
-
     fun openGallery(context: Context) {
         val uri = _lastPhotoUri.value
         val intent = if (uri != null)
@@ -148,15 +139,12 @@ class ViewfinderViewModel @Inject constructor(
         }
     }
 
-    // ── Settings ──────────────────────────────────────────────────
-
     fun toggleSettings()     = _uiState.update { it.copy(showSettings  = !it.showSettings) }
     fun toggleGrid()         = _uiState.update { it.copy(gridEnabled   = !it.gridEnabled) }
     fun toggleWbFix()        = _uiState.update { it.copy(wbFixActive   = !it.wbFixActive) }
     fun toggleLocation()     = _uiState.update { it.copy(saveLocation  = !it.saveLocation) }
     fun toggleShutterSound() = _uiState.update { it.copy(shutterSound  = !it.shutterSound) }
 
-    // Fix 4: Flash toggle cycles through all modes
     fun toggleFlash() {
         val next = when (_uiState.value.flash) {
             FlashSetting.AUTO  -> FlashSetting.ON
@@ -184,7 +172,6 @@ class ViewfinderViewModel @Inject constructor(
         _uiState.update { it.copy(mode = mode) }
     }
 
-    // Fix 2: Proper zoom using CameraX ratio
     fun setZoom(value: Float) {
         _uiState.update { it.copy(zoom = value) }
         cameraManager.setZoomRatio(value)

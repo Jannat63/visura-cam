@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
             WithCameraPermission {
                 val nav = rememberNavController()
                 NavHost(
-                    navController   = nav,
+                    navController    = nav,
                     startDestination = "viewfinder",
                     modifier = Modifier
                         .fillMaxSize()

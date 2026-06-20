@@ -52,12 +52,12 @@ jobs:
           rm -f app/src/main/java/com/visura/cam/utils/BatchColorFixer.kt
           rm -f app/src/main/java/com/visura/cam/utils/ExifWriter.kt
           rm -f app/src/main/java/com/visura/cam/utils/ImageProcessor.kt
+          rm -f app/src/main/java/com/visura/cam/utils/ProRenderEngine.kt
           find app/src/main/java -name "*.kt" | sort
 
       - name: Install ImageMagick
         run: sudo apt-get install -y imagemagick
 
-      # Fix 5: Create proper AJ Cam branded icon
       - name: Generate AJ Cam app icons
         run: |
           mkdir -p app/src/main/res/mipmap-mdpi
@@ -66,7 +66,6 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-          # Create base icon: dark background + yellow-green "AJ" text
           create_icon() {
             SIZE=$1
             OUTPUT=$2
@@ -79,11 +78,6 @@ jobs:
               -pointsize ${FONT_SIZE} \
               -gravity Center \
               -annotate 0 "AJ" \
-              -fill "#B8F026" \
-              -draw "line 0,$((SIZE*75/100)) ${SIZE},$((SIZE*75/100))" \
-              -fill "#B8F026" \
-              -pointsize $((FONT_SIZE / 3)) \
-              -annotate +0+$((SIZE*35/100)) "CAM" \
               PNG24:${OUTPUT}
           }
 
@@ -97,8 +91,6 @@ jobs:
           create_icon 144 app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
           create_icon 192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           create_icon 192 app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
-          echo "Icons created:"
-          ls -lh app/src/main/res/mipmap-xxhdpi/
 
       - name: Cache Gradle packages
         uses: actions/cache@v4
